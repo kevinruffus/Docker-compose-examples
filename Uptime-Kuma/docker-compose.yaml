@@ -5,7 +5,7 @@ networks:
   uptimekuma:
     driver: bridge
     driver_opts:
-      com.docker.network.bridge.name: ${UPTIME-NET}
+      com.docker.network.bridge.name: ${UPTIME_NET}
     ipam:
       driver: default
       config:
