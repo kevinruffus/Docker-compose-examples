@@ -1,0 +1,52 @@
+version: "3.9"
+
+# networks
+networks:
+  watchtower:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: ${WATCHTOWER_NET}
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+services:
+  # Watchtower
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    # Set hostname and domain for giggles if you want to.
+    # hostname: ${WATCHTOWER_HOST}
+    # domainname: ${DOMAIN}
+    environment:
+      TZ: ${TZ}
+      WATCHTOWER_CLEANUP: ${CLEANUP}
+      DOCKER_API_VERSION: ${API_VER}
+      WATCHTOWER_TIMEOUT: ${WATCHTOWER_TIMEOUT}
+      WATCHTOWER_INCLUDE_STOPPED: ${INCLUDE_STOPPED}
+      WATCHTOWER_INCLUDE_RESTARTING: ${INCLUDE_RESTARTING}
+      WATCHTOWER_HTTP_API_UPDATE: ${HTTP_API_UPDATE}
+      WATCHTOWER_HTTP_API_PERIODIC_POLLS: ${HTTP_API_PERIODIC_POLLS}
+      WATCHTOWER_HTTP_API_TOKEN: ${API_KEY}
+      WATCHTOWER_HTTP_API_METRICS: ${HTTP_API_METRICS}
+      WATCHTOWER_POLL_INTERVAL: ${POLL_INTERVAL}
+      WATCHTOWER_MONITOR_ONLY: ${MONITOR_ONLY}
+      WATCHTOWER_NOTIFICATIONS: ${NOTIFICATIONS}
+      WATCHTOWER_NOTIFICATION_EMAIL_SERVER_TLS_SKIP_VERIFY: ${EMAIL_SKIP_VERIFY}
+      WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PORT: ${EMAIL_PORT}
+      WATCHTOWER_NOTIFICATION_EMAIL_FROM: ${EMAIL_FROM}
+      WATCHTOWER_NOTIFICATION_EMAIL_TO: ${EMAIL_TO}
+      WATCHTOWER_NOTIFICATION_EMAIL_SERVER: ${EMAIL_SERVER}
+      WATCHTOWER_NOTIFICATION_EMAIL_SERVER_USER: ${EMAIL_USER}
+      WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PASSWORD: ${EMAIL_PASS}
+      WATCHTOWER_NOTIFICATION_EMAIL_DELAY: ${EMAIL_DELAY}
+    networks:
+      watchtower:
+        ipv4_address: ${WATCHTOWER_IP}
+    ports:
+      - ${WATCHTOWER_EXP_PORT}:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
