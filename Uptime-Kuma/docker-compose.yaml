@@ -22,6 +22,9 @@ services:
     container_name: uptime-kuma
     image: louislam/uptime-kuma:latest
     restart: unless-stopped
+    # Set hostname and domain for giggles if you want to.
+    # hostname: ${WATCHTOWER_HOST}
+    # domainname: ${DOMAIN}
     environment:
       TZ: ${TZ}
     networks:
