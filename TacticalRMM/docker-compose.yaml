@@ -1,0 +1,279 @@
+version: "3.9"
+
+# networks
+networks:
+  proxy:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: ${PROXY_NET_NAME}
+    ipam:
+      driver: default
+      config:
+        - subnet: ${PROXY_SUBNET}/24
+          gateway: ${PROXY_GATEWAY}
+  api-db:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: ${API_DB_NET_NAME}
+    ipam:
+      driver: default
+      config:
+        - subnet: ${API_DB_SUBNET}/24
+          gateway: ${API_DB_GATEWAY}
+  redis:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${REDIS_SUBNET}/24
+          gateway: ${REDIS_GATEWAY}
+  mesh-db:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: ${MESH_SUBNET}/24
+          gateway: ${MESH_GATEWAY}
+
+# docker managed persistent volumes
+volumes:
+  tactical_data:
+  postgres_data:
+  mongo_data:
+  mesh_data:
+  redis_data:
+
+services:
+  # postgres database for api service
+  tactical-postgres:
+    container_name: ${CONTAINER_PREFIX}-postgres
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: tacticalrmm
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASS}
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "tactical", "-d", "tacticalrmm" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - api-db
+
+  # redis container for celery tasks
+  tactical-redis:
+    container_name: ${CONTAINER_PREFIX}-redis
+    image: redis:6.0-alpine
+    user: 1000:1000
+    command: redis-server
+    restart: always
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    volumes: 
+      - redis_data:/data
+    networks:
+      - redis
+
+  # used to initialize the docker environment
+  tactical-init:
+    container_name: ${CONTAINER_PREFIX}-init
+    image: ${IMAGE_REPO}tactical:${VERSION}
+    restart: on-failure
+    command: [ "tactical-init" ]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASS: ${POSTGRES_PASS}
+      APP_HOST: ${APP_HOST}
+      API_HOST: ${API_HOST}
+      MESH_USER: ${MESH_USER}
+      MESH_HOST: ${MESH_HOST}
+      TRMM_USER: ${TRMM_USER}
+      TRMM_PASS: ${TRMM_PASS}
+    depends_on:
+      - tactical-postgres
+      - tactical-meshcentral
+      - tactical-redis
+    networks:
+      - api-db
+      - proxy
+      - redis
+    volumes:
+      - tactical_data:/opt/tactical
+      - mesh_data:/meshcentral-data
+      - mongo_data:/mongo/data/db
+      - redis_data:/redis/data
+  
+  # nats
+  tactical-nats:
+    container_name: ${CONTAINER_PREFIX}-nats
+    image: ${IMAGE_REPO}tactical-nats:${VERSION}
+    user: 1000:1000
+    restart: always
+    environment:
+      API_HOST: ${API_HOST}
+    volumes:
+      - tactical_data:/opt/tactical
+    networks:
+      api-db:
+      proxy:
+        aliases:
+          - ${API_HOST}
+
+  # meshcentral container
+  tactical-meshcentral:
+    container_name: ${CONTAINER_PREFIX}-meshcentral
+    image: ${IMAGE_REPO}tactical-meshcentral:${VERSION}
+    user: 1000:1000
+    restart: always
+    environment: 
+      MESH_HOST: ${MESH_HOST}
+      MESH_USER: ${MESH_USER}
+      MESH_PASS: ${MESH_PASS}
+      MONGODB_USER: ${MONGODB_USER}
+      MONGODB_PASSWORD: ${MONGODB_PASSWORD}
+      MESH_PERSISTENT_CONFIG: ${MESH_PERSISTENT_CONFIG}
+      NGINX_HOST_IP: ${PROXY_IP}
+    networks:
+      proxy:
+        aliases:
+          - ${MESH_HOST}
+      mesh-db:
+    volumes:
+      - tactical_data:/opt/tactical
+      - mesh_data:/home/node/app/meshcentral-data
+    depends_on:
+      - tactical-mongodb
+
+  # mongodb container for meshcentral
+  tactical-mongodb:
+    container_name: ${CONTAINER_PREFIX}-mongodb
+    image: mongo:4.4
+    user: 1000:1000
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
+      MONGO_INITDB_DATABASE: meshcentral
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/meshcentral --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    networks:
+      - mesh-db
+    volumes:
+      - mongo_data:/data/db
+
+  # container that hosts vue frontend
+  tactical-frontend:
+    container_name: ${CONTAINER_PREFIX}-frontend
+    image: ${IMAGE_REPO}tactical-frontend:${VERSION}
+    user: 1000:1000
+    restart: always
+    networks:
+      - proxy
+    volumes:
+      - tactical_data:/opt/tactical
+    environment:
+      API_HOST: ${API_HOST}
+
+  # container for django backend
+  tactical-backend:
+    container_name: ${CONTAINER_PREFIX}-backend
+    image: ${IMAGE_REPO}tactical:${VERSION}
+    user: 1000:1000
+    command: [ "tactical-backend" ]
+    restart: always
+    networks:
+      - proxy
+      - api-db
+      - redis
+    volumes:
+      - tactical_data:/opt/tactical
+    depends_on:
+      - tactical-postgres
+
+  # container for django websockets connections
+  tactical-websockets:
+    container_name: ${CONTAINER_PREFIX}-websockets
+    image: ${IMAGE_REPO}tactical:${VERSION}
+    user: 1000:1000
+    command: [ "tactical-websockets" ]
+    restart: always
+    networks:
+      - proxy
+      - api-db
+      - redis
+    volumes:
+      - tactical_data:/opt/tactical
+    depends_on:
+      - tactical-postgres
+      - tactical-backend
+
+  # container for tactical reverse proxy
+  tactical-nginx:
+    container_name: ${CONTAINER_PREFIX}-nginx
+    image: ${IMAGE_REPO}tactical-nginx:${VERSION}
+    user: 1000:1000
+    restart: always
+    environment:
+      APP_HOST: ${APP_HOST}
+      API_HOST: ${API_HOST}
+      MESH_HOST: ${MESH_HOST}
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:8080" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    networks:
+      proxy:
+        ipv4_address: ${PROXY_IP}
+    ports:
+      - ${PROXY_HTTP_PORT}:8080
+      - ${PROXY_HTTPS_PORT}:4443
+    volumes:
+      - tactical_data:/opt/tactical
+
+  # container for celery worker service
+  tactical-celery:
+    container_name: ${CONTAINER_PREFIX}-celery
+    image: ${IMAGE_REPO}tactical:${VERSION}
+    user: 1000:1000
+    command: [ "tactical-celery" ]
+    restart: always
+    networks:
+      - redis
+      - proxy
+      - api-db
+    volumes:
+      - tactical_data:/opt/tactical
+    depends_on:
+      - tactical-postgres
+      - tactical-redis
+
+  # container for celery beat service
+  tactical-celerybeat:
+    container_name: ${CONTAINER_PREFIX}-celerybeat
+    image: ${IMAGE_REPO}tactical:${VERSION}
+    user: 1000:1000
+    command: [ "tactical-celerybeat" ]
+    restart: always
+    networks:
+      - proxy
+      - redis
+      - api-db
+    volumes:
+      - tactical_data:/opt/tactical
+    depends_on:
+      - tactical-postgres
+      - tactical-redis
