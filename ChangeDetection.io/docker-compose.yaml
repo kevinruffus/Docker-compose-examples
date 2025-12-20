@@ -1,0 +1,66 @@
+version: "3.9"
+
+# Networks
+networks:
+  changedetection:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: changedetection
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  changedetection-data:
+
+services:
+  # ChangeDetection.io
+  changedetection:
+    container_name: changedetection
+    image: dgtlmoon/changedetection.io:latest
+    hostname: ${CHANGEDETECTION_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      HIDE_REFERER: true
+      BASE_URL: https:\\${CHANGEDETECTION_HOST}.${DOMAIN}
+      LOGGER_LEVEL: TRACE
+      PLAYWRIGHT_DRIVER_URL: ws://sockpuppetbrowser:3000
+    networks:
+      changedetection:
+        ipv4_address: ${CHANGEDETECTION_IP}
+    ports:
+      - ${EXT_PORT}:5000
+    volumes:
+      - changedetection-data:/datastore
+    depends_on:
+      sockpuppetbrowser:
+        condition: service_started
+
+  sockpuppetbrowser:
+  # sockpuppetbrowser
+    container_name: sockpuppetbrowser
+    image: dgtlmoon/sockpuppetbrowser:latest
+    restart: unless-stopped
+    tmpfs:
+      - /tmp
+    environment:
+      SCREEN_WIDTH: 1920
+      SCREEN_HEIGHT: 1024
+      SCREEN_DEPTH: 16
+      MAX_CONCURRENT_CHROME_PROCESSES: 10
+      STATS_REFRESH_SECONDS: 120
+    healthcheck:
+      test: "python3 /usr/src/app/docker-health-check.py --host http://localhost"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      changedetection:
+        ipv4_address: ${SOCKPUPPETBROWSER_IP}

@@ -1,0 +1,33 @@
+version: "3.9"
+
+# networks
+networks:
+  autoheal:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: autoheal
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+services:
+  # Autoheal
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 10
+      AUTOHEAL_START_PERIOD: 10
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
+      DOCKER_SOCK: /var/run/docker.sock
+      CURL_TIMEOUT: 30
+    networks:
+      autoheal:
+        ipv4_address: ${AUTOHEAL_IP}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

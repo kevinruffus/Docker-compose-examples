@@ -1,0 +1,59 @@
+version: "3.9"
+
+# networks
+networks:
+  authnet:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: authnet
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+# docker managed persistent volumes
+volumes:
+  config:
+  redis:
+
+services:
+  # Authelia container
+  authelia:
+    container_name: authelia
+    image: authelia/authelia
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+    depends_on:
+      - redis
+    volumes:
+      - config:/config
+    networks:
+      authnet:
+        ipv4_address: ${AUTHELIA_IP}
+    ports:
+      - ${EXP_PORT}:9091
+    
+  # Redis container
+  redis:
+    container_name: authelia-redis
+    image: redis:alpine
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+    environment:
+      TZ: ${TZ}
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - redis:/data
+    networks:
+      authnet:
+        ipv4_address: ${REDIS_IP}
+    expose:
+      - 6379
