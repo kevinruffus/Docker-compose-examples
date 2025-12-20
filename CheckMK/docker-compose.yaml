@@ -1,0 +1,41 @@
+version: "3.9"
+
+# Networks
+networks:
+  checkmk:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: checkmk
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  monitoring:
+
+services:
+  # CheckMK
+  checkmk:
+    container_name: checkmk
+    image: checkmk/check-mk-raw:latest
+    hostname: ${CHECKMK_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    tmpfs:
+      - /opt/omd/sites/checkmk/tmp:uid=1000,gid=1000
+    environment:
+      CMK_SITE_ID: checkmk
+      CMK_PASSWORD: ${PASSWORD}
+    networks:
+      checkmk:
+        ipv4_address: ${CHECKMK_IP}
+    ports:
+      - ${EXT_5000}:5000
+      - ${EXT_8000}:8000
+    volumes:
+      - monitoring:/omd/sites
+      - /etc/localtime:/etc/localtime:ro
