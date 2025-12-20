@@ -1,0 +1,118 @@
+version: "3.9"
+#
+# The Firefly III Data Importer will ask you for the Firefly III URL and a "Client ID".
+# You can generate the Client ID at http://localhost/profile (after registering)
+# The Firefly III URL is: http://app:8080
+#
+# Other URL's will give 500 | Server Error
+#
+
+# networks
+networks:
+  firefly_iii:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: firefly_iii
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# docker managed persistent volumes
+volumes:
+  firefly_iii_upload:
+  firefly_iii_db:
+  redis:
+
+services:
+  # Firefly III app
+  app:
+    image: fireflyiii/core:latest
+    container_name: firefly_iii_core
+    hostname: app
+    restart: unless-stopped
+    depends_on:
+      - db
+    networks:
+      firefly_iii:
+        ipv4_address: ${FIREFLY_APP_IP}
+    ports:
+      - ${EXT_APP_HTTP}:8080
+    volumes:
+      - firefly_iii_upload:/var/www/html/storage/upload
+    
+  # MariaDB
+  db:
+    image: mariadb:latest
+    container_name: firefly_iii_db
+    hostname: db
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+      start_period: 1m
+      start_interval: 10s
+      interval: 1m
+      timeout: 5s
+      retries: 3
+    networks:
+      firefly_iii:
+        ipv4_address: ${MARIADB_IP}
+    volumes:
+      - firefly_iii_db:/var/lib/mysql
+
+  # Importer
+  importer:
+    image: fireflyiii/data-importer:latest
+    container_name: firefly_iii_importer
+    hostname: importer
+    restart: unless-stopped
+    depends_on:
+      - app
+    networks:
+      firefly_iii:
+        ipv4_address: ${IMPORTER_IP}
+    ports:
+      - ${EXT_IMPORTER_HTTP}:8080
+
+  # Redis container
+  redis:
+    image: redis:alpine
+    hostname: redis
+    container_name: firefly_iii_redis
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - redis:/data
+    networks:
+      firefly_iii:
+        ipv4_address: ${REDIS_IP}
+    expose:
+      - 6379
+
+  cron:
+    #
+    # To make this work, set STATIC_CRON_TOKEN in your .env file or as an environment variable
+    # The STATIC_CRON_TOKEN must be *exactly* 32 characters long
+    # Use this URL for inspiration: https://www.random.org/strings/?num=1&len=32&digits=on&upperalpha=on&loweralpha=on&unique=on&format=html&rnd=new
+    #
+    image: alpine
+    container_name: firefly_iii_cron
+    restart: unless-stopped
+    command: sh -c "
+      apk add tzdata && \
+      (ln -fs /usr/share/zoneinfo/$$TZ /etc/localtime || true) && \
+      echo \"0 3 * * * wget -qO- http://app:8080/api/v1/cron/$$STATIC_CRON_TOKEN;echo\"
+      | crontab - && \
+      crond -f -L /dev/stdout"
+    networks:
+      firefly_iii:
+        ipv4_address: ${CRON_IP}
+    depends_on:
+      - app

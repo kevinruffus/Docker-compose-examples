@@ -1,0 +1,57 @@
+version: "3.9"
+
+# Networks
+networks:
+  collobora:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: collobora
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+# Docker managed persistent volumes
+volumes:
+  config:
+  fonts:
+
+services:
+  collabora:
+    image: collabora/code
+    container_name: collabora
+    hostname: ${COLLOBORA_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_CHROOT
+      - SYS_ADMIN
+      - FOWNER
+      - CHOWN
+    security_opt:
+      - seccomp=unconfined
+    labels:
+      - autoheal=true
+    environment:
+      - username=${USER}
+      - password=${PASS}
+      - dictionaries=${DICT}
+      - TZ=${TZ}
+      - server_name=${COLLOBORA_HOST}.${DOMAIN}
+      - extra_params=
+        --o:ssl.termination=true
+        --o:ssl.enable=false
+      - domain=${OWNCLOUD_HOST}.${DOMAIN}
+    networks:
+      collobora:
+        ipv4_address: ${COLLOBORA_IP}
+    ports:
+      - ${EXT_PORT}:9980
+    volumes:
+      - config:/etc/coolwsd
+      - /etc/localtime:/etc/localtime:ro
+      - fonts:/usr/share/fonts/truetype/more/:ro
+      - fonts:/opt/cool/systemplate/usr/share/fonts/truetype/more/:ro
