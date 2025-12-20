@@ -1,0 +1,38 @@
+version: "3.9"
+
+# networks
+networks:
+  homeassistant:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: homeassistant
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# docker managed persistent volumes
+volumes:
+  homeassistant_config:
+
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    hostname: ${HA_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    privileged: true
+    environment:
+      TZ: ${TZ}
+    networks:
+      homeassistant:
+        ipv4_address: ${HA_IP}
+    ports:
+      - ${EXT_PORT}:8123
+    volumes:
+      - homeassistant_config:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro

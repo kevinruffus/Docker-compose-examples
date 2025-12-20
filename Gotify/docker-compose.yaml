@@ -1,0 +1,37 @@
+version: "3.9"
+
+# networks
+networks:
+  gotify:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: gotify
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# docker managed persistent volumes
+volumes:
+  data:
+
+
+services:
+  gotify:
+    image: gotify/server
+    container_name: gotify
+    hostname: ${GOTIFY_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    environment:
+      GOTIFY_DEFAULTUSER_PASS: ${PASS}
+      TZ: ${TZ}
+    networks:
+      gotify:
+        ipv4_address: ${GOTIFY_IP}
+    ports:
+      - ${EXT_PORT}:80
+    volumes:
+      - data:/app/data

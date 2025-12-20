@@ -1,0 +1,69 @@
+version: "3.9"
+
+# Networks
+networks:
+  glpi:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: glpi
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+# Docker managed persistent volumes          
+volumes:
+  data:
+  db:
+
+services:
+  glpi:
+    image: glpi/glpi:latest
+    container_name: glpi
+    hostname: ${GLPI_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      GLPI_DB_HOST: db
+      GLPI_DB_PORT: 3306
+      GLPI_DB_NAME: ${GLPI_DB_NAME}
+      GLPI_DB_USER: ${GLPI_DB_USER}
+      GLPI_DB_PASSWORD: ${GLPI_DB_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - data:/var/glpi:rw
+    networks:
+      glpi:
+        ipv4_address: ${GLPI_IP}
+    ports:
+      - ${EXT_PORT}:80
+
+  db:
+    image: mariadb:latest
+    container_name: glpi-db
+    restart: unless-stopped
+    environment:
+      MARIADB_AUTO_UPGRADE: true
+      MYSQL_RANDOM_ROOT_PASSWORD: yes
+      MYSQL_DATABASE: ${GLPI_DB_NAME}
+      MYSQL_USER: ${GLPI_DB_USER}
+      MYSQL_PASSWORD: ${GLPI_DB_PASSWORD}
+      TZ: ${TZ}
+    healthcheck:
+      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+      start_period: 1m
+      start_interval: 10s
+      interval: 1m
+      timeout: 5s
+      retries: 3
+    networks:
+      glpi:
+        ipv4_address: ${DB_IP}
+    volumes:
+       - db:/var/lib/mysql
+    expose:
+      - 3306
