@@ -20,8 +20,6 @@ services:
     hostname: ${RICKROLL_HOST}
     domainname: ${DOMAIN}
     restart: unless-stopped
-    labels:
-      - autoheal=true
     environment:
       TZ: ${TZ}
     networks:

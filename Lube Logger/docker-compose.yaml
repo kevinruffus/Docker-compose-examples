@@ -1,0 +1,54 @@
+version: "3.9"
+
+# networks
+networks:
+  lubelogger:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: lubelogger
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+# docker managed persistent volumes
+volumes:
+  data:
+  keys:
+  postgres:
+
+services:
+  app:
+    image: ghcr.io/hargata/lubelogger:latest
+    container_name: lubelogger
+    hostname: ${LL_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+    networks:
+      lubelogger:
+        ipv4_address: ${LL_IP}
+    ports:
+      - ${EXT_PORT}:8080
+    volumes:
+      - data:/App/data
+      - keys:/root/.aspnet/DataProtection-Keys
+    
+  postgres:
+    image: postgres:14
+    container_name: lubelogger_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASS}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: ${TZ}
+    networks:
+      lubelogger:
+        ipv4_address: ${PGDB_IP}
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro

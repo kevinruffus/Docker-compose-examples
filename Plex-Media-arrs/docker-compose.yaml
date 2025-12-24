@@ -1,0 +1,346 @@
+version: "3.9"
+
+# networks
+networks:
+  media:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: media
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# docker managed persistent volumes
+volumes:
+  tautulli_data:
+  lidarr_data:
+  overseerr_data:
+  radarr_data:
+  sonarr_data:
+  nzbget_data:
+  bazarr_data:
+  recyclarr_data:
+  readarr_data:
+  plex_data:
+#  unmanic_data:
+#  whisper_cache:
+
+
+services:
+  # Recyclarr
+  recyclarr:
+    image: ghcr.io/recyclarr/recyclarr
+    container_name: recyclarr
+    hostname: ${RECYCLARR_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    security_opt: ['no-new-privileges:true']
+    environment:  
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    networks:
+      media:
+        ipv4_address: ${RECYCLARR_IP}
+    tmpfs: /tmp
+    volumes:
+      - recyclarr_data:/config
+  
+  # Tautulli
+  tautulli:
+    container_name: tautulli
+    image: lscr.io/linuxserver/tautulli:latest
+    hostname: ${TAUTULLI_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    networks:
+      media:
+        ipv4_address: ${TAUTULLI_IP}
+    ports:
+      - ${TAUTULLI_EXP_PORT}:8181
+    volumes:
+      - tautulli_data:/config
+
+  # Lidarr
+  lidarr:
+    container_name: lidarr
+    image: lscr.io/linuxserver/lidarr:latest
+    hostname: ${LIDARR_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8686"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    networks:
+      media:
+        ipv4_address: ${LIDARR_IP}
+    ports:
+      - ${LIDARR_EXP_PORT}:8686
+    volumes:
+      - lidarr_data:/config
+      - /nzbget/downloads:/downloads
+      - /Music:/music
+  
+  # Overseerr
+  overseerr:
+    container_name: overseerr
+    image: lscr.io/linuxserver/overseerr:latest
+    hostname: ${OVERSEERR_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5055"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    networks:
+      media:
+        ipv4_address: ${OVERSEERR_IP}
+    ports:
+      - ${OVERSEERR_EXP_PORT}:5055
+    volumes:
+      - overseerr_data:/config
+  
+  # Radarr
+  radarr:
+    container_name: radarr
+    image: lscr.io/linuxserver/radarr:latest
+    hostname: ${RADARR_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    networks:
+      media:
+        ipv4_address: ${RADARR_IP}
+    ports:
+      - ${RADARR_EXP_PORT}:7878
+    volumes:
+      - radarr_data:/config
+      - /nzbget/downloads:/downloads
+      - /Movies:/movies
+
+  # Sonarr
+  sonarr:
+    container_name: sonarr
+    image: lscr.io/linuxserver/sonarr:latest
+    hostname: ${SONARR_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    networks:
+      media:
+        ipv4_address: ${SONARR_IP}
+    ports:
+      - ${SONARR_EXP_PORT}:8989
+    volumes:
+      - sonarr_data:/config
+      - /nzbget/downloads:/downloads
+      - /TVShows:/tv
+      
+  # Bazarr
+  bazarr:
+    container_name: bazarr
+    image: lscr.io/linuxserver/bazarr:latest
+    hostname: ${BAZARR_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6767"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    networks:
+      media:
+        ipv4_address: ${BAZARR_IP}
+    ports:
+      - ${BAZARR_EXP_PORT}:6767
+    volumes:
+      - bazarr_data:/config
+      - /nzbget/downloads:/downloads
+      - /TVShows:/tv
+      - /Movies:/movies
+      
+  # Readarr
+  readarr:
+    container_name: readarr
+    image: lscr.io/linuxserver/readarr:develop
+    hostname: ${READARR_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    networks:
+      media:
+        ipv4_address: ${READARR_IP}
+    ports:
+      - ${READARR_EXP_PORT}:8787
+    volumes:
+      - readarr_data:/config
+      - /nzbget/downloads:/downloads
+      - /Books:/books
+
+  # nzbget
+  nzbget:
+    container_name: nzbget
+    image: lscr.io/linuxserver/nzbget:latest
+    hostname: ${NZBGET_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6789"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    networks:
+      media:
+        ipv4_address: ${NZBGET_IP}
+    ports:
+      - ${NZBGET_EXP_PORT}:6789
+    volumes:
+      - nzbget_data:/config
+      - /nzbget/downloads:/downloads
+      
+  # Plex Media Server
+  plex:
+    container_name: plex
+    image: lscr.io/linuxserver/plex:latest
+    hostname: ${PLEX_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:32400/identity"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      VERSION: docker
+#      NVIDIA_VISIBLE_DEVICES: all
+    networks:
+      media:
+        ipv4_address: ${PLEX_IP}
+    ports:
+      - 32400:32400/tcp
+      - 3005:3005/tcp
+      - 8324:8324/tcp
+      - 32469:32469/tcp
+      - 1900:1900/udp
+      - 32410:32410/udp
+      - 32412:32412/udp
+      - 32413:32413/udp
+      - 32414:32414/udp
+    volumes:
+      - plex_data:/config
+      - /TVShows:/tv
+      - /Movies:/movies
+      - /Music:/music
+      - /dev/shm:/dev/shm
+#    runtime: nvidia
+
+  # unmanic
+#  unmanic:
+#    container_name: unmanic
+#    image: josh5/unmanic:latest
+#    hostname: ${UNMANIC_HOST}
+#    domainname: ${DOMAIN}
+#    restart: unless-stopped
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:8888"]
+#      interval: 30s
+#      timeout: 5s
+#      retries: 3
+#      start_period: 10s
+#    environment:
+#      PUID: ${PUID}
+#      PGID: ${PGID}
+#      TZ: ${TZ}
+#      NVIDIA_VISIBLE_DEVICES: all
+#    networks:
+#      media:
+#        ipv4_address: ${UNMANIC_IP}
+#    ports:
+#      - ${UNMANIC_EXP_PORT}:8888
+#    volumes:
+#      - unmanic_data:/config
+#      - /TVShows:/tv
+#      - /Movies:/movies
+#      - /dev/shm/unmanic:/tmp/unmanic
+#    runtime: nvidia
+
+  # Whisper - AI subtitle extraction
+#  whisper:
+#    container_name: whisper
+#    image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+#    restart: unless-stopped
+#    hostname: ${WHISPER_HOST}
+#    domainname: ${DOMAIN}
+#    environment:
+#      GPUS: all
+#      ASR_MODEL: small
+#      ASR_MODEL_PATH: /data/whisper
+#      ASR_ENGINE: faster_whisper
+#      NVIDIA_VISIBLE_DEVICES: all
+#    networks:
+#      media:
+#        ipv4_address: ${WHISPER_IP}
+#    ports:
+#      - ${WHISPER_EXP_PORT}:9000
+#    runtime: nvidia
