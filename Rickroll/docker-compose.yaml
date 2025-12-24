@@ -1,0 +1,31 @@
+version: "3.9"
+
+# Networks
+networks:
+  rickroll:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: rickroll
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+services:
+  # Rickroll
+  rickroll:
+    image: modem7/docker-rickroll:latest
+    container_name: Rickroll
+    hostname: ${RICKROLL_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+    environment:
+      TZ: ${TZ}
+    networks:
+      rickroll:
+        ipv4_address: ${RICKROLL_IP}
+    ports:
+      - ${RICKROLL_EXP_PORT}:8080
