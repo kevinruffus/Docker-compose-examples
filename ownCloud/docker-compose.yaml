@@ -1,0 +1,118 @@
+version: "3.9"
+
+
+# Networks
+networks:
+  owncloud:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: owncloud
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+          
+
+# Docker managed persistent volumes          
+volumes:
+  data:
+  mysql:
+  redis:
+  clamav:
+  
+  
+services:
+  # owncloud server
+  owncloud:
+    image: owncloud/server:latest
+    container_name: oc_server
+    restart: unless-stopped
+    ports:
+      - ${HTTP_PORT}:8080
+    depends_on:
+      - mariadb
+      - redis
+    environment:
+      OWNCLOUD_DOMAIN: ${OWNCLOUD_DOMAIN}
+      OWNCLOUD_TRUSTED_DOMAINS: ${OWNCLOUD_TRUSTED_DOMAINS}
+      OWNCLOUD_DB_TYPE: mysql
+      OWNCLOUD_DB_NAME: ${DB_NAME}
+      OWNCLOUD_DB_USERNAME: ${DB_USER}
+      OWNCLOUD_DB_PASSWORD: ${DB_PASSWORD}
+      OWNCLOUD_DB_HOST: mariadb
+      OWNCLOUD_ADMIN_USERNAME: ${ADMIN_USERNAME}
+      OWNCLOUD_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      OWNCLOUD_MYSQL_UTF8MB4: "true"
+      OWNCLOUD_REDIS_ENABLED: "true"
+      OWNCLOUD_REDIS_HOST: redis
+    healthcheck:
+      test: ["CMD", "/usr/bin/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      owncloud:
+        ipv4_address: ${OWNCLOUD_IP}
+    volumes:
+      - data:/mnt/data
+      - /OwnCloud/files:/mnt/data/files
+      - /OwnCloud/temp:/mnt/data/temp
+
+  # Mariadb container
+  mariadb:
+    image: mariadb:latest
+    container_name: oc_mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_AUTO_UPGRADE: ${MARIADB_AUTO_UPGRADE}
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOTPASS}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      TZ: ${TZ}
+    command: ["--max-allowed-packet=512M", "--innodb-log-file-size=128M"]
+    healthcheck:
+        test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+        start_period: 1m
+        start_interval: 10s
+        interval: 1m
+        timeout: 5s
+        retries: 3
+    networks:
+      owncloud:
+        ipv4_address: ${DB_IP}
+    volumes:
+      - mysql:/var/lib/mysql
+
+  # Redis container
+  redis:
+    image: redis:6
+    container_name: oc_redis
+    restart: unless-stopped
+    command: ["--databases", "1"]
+    environment:
+      TZ: ${TZ}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis:/data
+    networks:
+      owncloud:
+        ipv4_address: ${REDIS_IP}
+
+  # ClamAV container
+  clamav:
+    image: clamav/clamav:latest
+    container_name: oc_clamav
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - clamav:/var/lib/clamav
+    networks:
+      owncloud:
+        ipv4_address: ${CLAMAV_IP}

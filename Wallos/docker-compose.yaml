@@ -1,0 +1,38 @@
+version: "3.9"
+
+# networks
+networks:
+  wallos:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: wallos
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# docker managed persistent volumes
+volumes:
+  db:
+  logos:
+
+
+services:
+  wallos:
+    container_name: wallos
+    image: bellamy/wallos:latest
+    hostname: ${WALLOS_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+    networks:
+      wallos:
+        ipv4_address: ${WALLOS_IP}
+    ports:
+      - ${EXT_PORT}:80
+    volumes:
+      - db:/var/www/html/db
+      - logos:/var/www/html/images/uploads/logos

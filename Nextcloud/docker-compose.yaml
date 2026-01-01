@@ -1,0 +1,190 @@
+version: "3.9"
+
+
+# Networks
+networks:
+  nextcloud:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: nextcloud
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  data:
+  html:
+  custom_apps:
+  config:
+  mysql:
+  redis:
+  clamav:
+  esearch:
+  esearch_plugins:
+  
+  
+services:
+  # nextcloud server
+  nextcloud:
+    image: nextcloud:latest
+    container_name: nextcloud
+    hostname: ${NC_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    depends_on:
+      nc-db:
+        condition: service_healthy
+      nc-redis:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+      MYSQL_HOST: nc-db
+      REDIS_HOST: nc-redis
+      PHP_UPLOAD_LIMIT: 16G
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES}
+      APACHE_DISABLE_REWRITE_IP: 1
+      NEXTCLOUD_TRUSTED_DOMAINS: ${TRUSTED_DOMAINS}
+      NEXTCLOUD_ADMIN_USER: ${ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      NEXTCLOUD_INIT_HTACCESS: true
+      NEXTCLOUD_ENABLE_NVIDIA_GPU: true
+      OVERWRITECLIURL: https://${NC_HOST}.${DOMAIN}
+      OVERWRITEHOST: ${NC_HOST}.${DOMAIN}
+      OVERWRITEPROTOCOL: https
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:80/status.php" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      nextcloud:
+        ipv4_address: ${NC_IP}
+    ports:
+      - ${EXT_NC_PORT}:80
+    volumes:
+      - html:/var/www/html
+      - custom_apps:/var/www/html/custom_apps
+      - config:/var/www/html/config
+      - /NextCloud/data:/var/www/html/data
+
+  # Cronjob container
+  nc-cron:
+    image: nextcloud:latest
+    container_name: nc-cron
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+    depends_on:
+      - nc-db
+      - nc-redis
+      - nextcloud
+    entrypoint: /cron.sh
+    environment:
+      TZ: ${TZ}
+
+    networks:
+      nextcloud:
+        ipv4_address: ${CRON_IP}
+    volumes:
+      - html:/var/www/html
+      - custom_apps:/var/www/html/custom_apps
+      - config:/var/www/html/config
+      - /NextCloud/data:/var/www/html/data
+
+  # Mariadb container
+  nc-db:
+    image: mariadb:latest
+    container_name: nc-db
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+    environment:
+      MARIADB_AUTO_UPGRADE: ${MARIADB_AUTO_UPGRADE}
+      MYSQL_RANDOM_ROOT_PASSWORD: true
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+      TZ: ${TZ}
+    command: [ "--max-allowed-packet=512M", "--innodb-log-file-size=128M", "--transaction-isolation=READ-COMMITTED", "--binlog-format=ROW" ]
+    healthcheck:
+        test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+        start_period: 1m
+        start_interval: 10s
+        interval: 1m
+        timeout: 5s
+        retries: 3
+    networks:
+      nextcloud:
+        ipv4_address: ${DB_IP}
+    volumes:
+      - mysql:/var/lib/mysql
+
+  # Redis container
+  nc-redis:
+    image: redis:alpine
+    container_name: nc-redis
+    restart: unless-stopped
+    command: ["--databases", "1"]
+    labels:
+      - autoheal=true
+    environment:
+      TZ: ${TZ}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      nextcloud:
+        ipv4_address: ${REDIS_IP}
+    volumes:
+      - redis:/data
+
+
+  # ClamAV
+  nc-clamav:
+    image: clamav/clamav:latest
+    container_name: nc-clamav
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+    environment:
+      TZ: ${TZ}
+    networks:
+      nextcloud:
+        ipv4_address: ${CLAMAV_IP}
+    volumes:
+      - clamav:/var/lib/clamav
+
+  # ElasticSearch
+  nc-esearch:
+    image: elasticsearch:8.8.0
+    container_name: nc-esearch
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - node.name=nc-esearch
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      nextcloud:
+        ipv4_address: ${ESEARCH_IP}
+    volumes:
+      - esearch:/usr/share/elasticsearch/data
+      - esearch_plugins:/usr/share/elasticsearch/plugins

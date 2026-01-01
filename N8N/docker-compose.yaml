@@ -1,0 +1,44 @@
+version: "3.9"
+
+# networks
+networks:
+  n8n:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: n8n
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+# docker managed persistent volumes
+volumes:
+  n8n_data:
+
+services:
+  # n8n
+  n8n:
+    container_name: n8n
+    image: docker.n8n.io/n8nio/n8n
+    restart: unless-stopped
+    hostname: ${N8N_HOST}
+    domainname: ${DOMAIN}
+    environment:
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: true
+      N8N_HOST: ${N8N_HOST}.${DOMAIN}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: https
+      N8N_RUNNERS_ENABLED: true
+      NODE_ENV: production
+      WEBHOOK_URL: https://${N8N_HOST}.${DOMAIN}/
+      GENERIC_TIMEZONE: ${TZ}
+      TZ: ${TZ}
+    networks:
+      n8n:
+        ipv4_address: ${N8N_IP}
+    ports:
+      - ${N8N_EXP_PORT}:5678
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - n8n:/files

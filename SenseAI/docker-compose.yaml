@@ -1,0 +1,58 @@
+version: "3.9"
+
+# networks
+networks:
+  senseai:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: senseai
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+# docker managed persistent volumes
+volumes:
+  senseai_data:
+  senseai_modules:
+
+services:
+  # SenseAI
+  senseai:
+    container_name: senseai
+    image: codeproject/ai-server:cuda12_2-2.9.7
+    restart: unless-stopped
+    hostname: ${SENSEAI_HOST}
+    domainname: ${DOMAIN}
+    healthcheck:
+      test: "wget --no-verbose --tries=1 --spider http://localhost:32168 || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      CUDA_MODE: true
+      MODE: Medium
+      GPUS: all
+      NVIDIA_VISIBLE_DEVICES: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    networks:
+      senseai:
+        ipv4_address: ${SENSEAI_IP}
+    ports:
+      - ${EXP_PORT}:32168
+    volumes:
+      - senseai_data:/etc/codeproject/ai
+      - senseai_modules:/app/modules
+    runtime: nvidia

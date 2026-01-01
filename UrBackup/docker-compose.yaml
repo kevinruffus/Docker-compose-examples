@@ -1,0 +1,49 @@
+version: "3.9"
+
+# networks
+networks:
+  urbackup:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: urbackup
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+# docker managed persistent volumes
+volumes:
+  app_data:
+  www_data:
+
+services:
+  # URBackup
+  urbackup:
+    image: uroni/urbackup-server:latest
+    container_name: urbackup
+    hostname: ${URBACKUP_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+    networks:
+      urbackup:
+        ipv4_address: ${URBACKUP_IP}
+    ports:
+      - 35623:35623/udp
+      - 55413:55413/tcp
+      - 55414:55414/tcp
+      - 55415:55415/tcp
+    volumes:
+      - app_data:/var/urbackup
+      - /UrBackupStorage:/backups
+      - www_data:/usr/share/urbackup
+#   Uncomment the following two lines if you're using BTRFS support
+#   cap_add:
+#     - SYS_ADMIN
+#   Uncomment the following two lines if you're using ZFS support
+    devices:
+      - /dev/zfs:/dev/zfs

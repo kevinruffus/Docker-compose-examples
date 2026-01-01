@@ -1,0 +1,51 @@
+version: "3.9"
+
+# Networks
+networks:
+  scrutiny:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: scrutiny
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+# Docker managed persistent volumes
+volumes:
+  scrutiny:
+  influxdb:
+
+services:
+  # Scrutiny
+  scrutiny:
+    container_name: scrutiny
+    image: ghcr.io/analogj/scrutiny:latest
+    hostname: ${SCRUTINY_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    cap_add:
+      - SYS_RAWIO
+      - SYS_ADMIN
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      TZ: ${TZ}
+    networks:
+      scrutiny:
+        ipv4_address: ${SCRUTINY_IP}
+    ports:
+      - ${SCRUTINY_EXP_PORT}:8080
+      - ${INFLUXDB_EXP_PORT}:8086
+    volumes:
+      - scrutiny:/opt/scrutiny/config
+      - influxdb:/opt/scrutiny/influxdb
+      - /run/udev:/run/udev:ro
+    devices:
+      - "/dev/nvme0"
+      - "/dev/sda"
