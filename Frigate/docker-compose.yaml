@@ -21,9 +21,9 @@ services:
   frigate:
     container_name: frigate
 # No direct gpu support
-    image: ghcr.io/blakeblackshear/frigate:stable
+#    image: ghcr.io/blakeblackshear/frigate:stable
 # For nvidia gpu support, use this instead:
-#    image: ghcr.io/blakeblackshear/frigate:stable-tensorrt
+    image: ghcr.io/blakeblackshear/frigate:stable-tensorrt
     hostname: ${FR_HOST}
     domainname: ${DOMAIN}
     privileged: true # this may not be necessary for all setups
@@ -31,13 +31,13 @@ services:
     stop_grace_period: 30s # allow enough time to shut down the various services
     shm_size: "1024mb" # update for your cameras based on calculation above
 # If using nvidia gpu, uncomment below:
-#    deploy:
-#      resources:
-#        reservations:
-#          devices:
-#            - driver: nvidia
-#              count: 1
-#              capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     environment:
       FRIGATE_RTSP_PASSWORD: ${FR_RTSP_PASS} # only needed if using with HASS... I think...
       TZ: ${TZ}
@@ -54,7 +54,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - config:/config
-      - /whateverfolderyouwant/Frigate:/media/frigate
+      - /Frigate:/media/frigate
       - type: tmpfs
         target: /tmp/cache
         tmpfs:
