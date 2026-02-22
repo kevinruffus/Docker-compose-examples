@@ -1,0 +1,54 @@
+version: "3.9"
+
+
+# Networks
+networks:
+  cswebui:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: cswebui
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  csw-data:
+
+
+services:
+  crowdsec-web-ui:
+    image: ghcr.io/theduffman85/crowdsec-web-ui:latest
+    container_name: crowdsec_web_ui
+    hostname: ${CS_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      CROWDSEC_URL: http://LAPI-IP:LAPI-PORT # Set to LAPI IP and port
+      CROWDSEC_USER: crowdsec-web-ui
+      CROWDSEC_PASSWORD: ${CS_PASS}
+      # Optional: Lookback period for alerts/stats (default: 168h/7d)
+      CROWDSEC_LOOKBACK_PERIOD: 7d
+      # Optional: Backend auto-refresh interval. Values: 0 (Off), 5s, 30s (default), 1m, 5m
+      CROWDSEC_REFRESH_INTERVAL: 30s
+      # Optional: Idle Mode settings to save resources
+      # Interval to use when no users are active (default: 5m)
+      CROWDSEC_IDLE_REFRESH_INTERVAL: 5m
+      # Time without API requests to consider system idle (default: 2m)
+      CROWDSEC_IDLE_THRESHOLD: 2m
+      # Optional: Interval for full cache refresh (default: 5m)
+      # Forces a complete data reload when active, skipped when idle.
+      CROWDSEC_FULL_REFRESH_INTERVAL: 5m
+      # Optional: Base path for reverse proxy deployments (e.g., /crowdsec)
+      # - BASE_PATH=/crowdsec
+    networks:
+      cswebui:
+        ipv4_address: ${CS_IP}
+    ports:
+      - ${CS_EXT_PORT}:3000
+    volumes:
+      - csw-data:/app/data

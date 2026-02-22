@@ -1,0 +1,88 @@
+version: "3.9"
+
+
+# Networks
+networks:
+  bookstack:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: bookstack
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  config:
+  db:
+
+
+services:
+  # MariaDB
+  mariadb:
+    image: mariadb:latest
+    container_name: bookstack-db
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+    networks:
+      bookstack:
+        ipv4_address: ${DB_IP}
+    volumes:
+      - db:/config
+  
+  # Bookstack
+  bookstack:
+    image: lscr.io/linuxserver/bookstack:latest
+    container_name: bookstack
+    restart: unless-stopped
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      APP_URL: ${APP_URL}
+      APP_KEY: ${APP_KEY}
+      DB_HOST: ${DB_IP}
+      DB_PORT: 3306
+      DB_USERNAME: ${DB_USER}
+      DB_PASSWORD: ${DB_PASS}
+      DB_DATABASE: ${DB_NAME}
+      QUEUE_CONNECTION: ${QUEUE_CON}
+#      APP_DEBUG: true
+#      AUTH_METHOD: oidc
+#      AUTH_AUTO_INITIATE: true # Set this to "true" to automatically redirect the user to authentik.
+#      OIDC_NAME: Authentik # The display name shown on the login page.
+#      OIDC_DISPLAY_NAME_CLAIMS: name # Claim(s) for the user's display name. Can have multiple attributes listed, separated with a '|' in which case those values will be joined with a space.
+#      OIDC_CLIENT_ID: ${OIDC_ID}
+#      OIDC_CLIENT_SECRET: ${OIDC_SECRET}
+#      OIDC_ISSUER: https://sso.example.com/application/o/bookstack/
+#      OIDC_ISSUER_DISCOVER: true
+#      OIDC_END_SESSION_ENDPOINT: https://sso.example.com/application/o/bookstack/end-session/
+#      OIDC_USER_TO_GROUPS: true
+#      OIDC_GROUPS_CLAIM: groups
+#      OIDC_REMOVE_FROM_GROUPS: true
+#      OIDC_DUMP_USER_DETAILS: false
+      MAIL_DRIVER: smtp
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_ENCRYPTION: tls
+      MAIL_USERNAME: ${MAIL_USER}
+      MAIL_PASSWORD: ${MAIL_PASS}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME}
+    networks:
+      bookstack:
+        ipv4_address: ${BS_IP}
+    ports:
+      - ${BS_EXP_PORT}:80
+    volumes:
+      - config:/config

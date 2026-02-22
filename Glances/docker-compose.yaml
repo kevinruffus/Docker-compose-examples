@@ -1,0 +1,34 @@
+version: "3.9"
+
+
+# Networks
+networks:
+  glances:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: glances
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+services:
+  glances:
+    image: nicolargo/glances:latest
+    container_name: glances
+    restart: unless-stopped
+    pid: host
+    environment:
+      GLANCES_OPT: -w
+    networks:
+      glances:
+        ipv4_address: ${GLANCES_IP}
+    ports:
+      - ${EXT_PORT_HTTP}:61208
+#      - ${EXT_PORT_HTTPS}:61209
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/os-release:/etc/os-release:ro
+      - /some-directory-here:/mnt/some-directory-here:ro

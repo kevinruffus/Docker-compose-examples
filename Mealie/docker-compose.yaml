@@ -1,0 +1,96 @@
+version: "3.9"
+
+
+# Networks
+networks:
+  mealie:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: mealie
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  mealie-data:
+  mealie-pgdata:
+
+
+services:
+  # Mealie server
+  mealie:
+    image: ghcr.io/mealie-recipes/mealie:latest
+    container_name: mealie 
+    hostname: ${MEALIE_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+    environment:
+      ALLOW_SIGNUP: "false"
+      PUID: ${PUID}
+      PGID: ${PGID}
+      TZ: ${TZ}
+      BASE_URL: https://${MEALIE_HOST}.${DOMAIN}
+      DB_ENGINE: postgres
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASS}
+      POSTGRES_SERVER: ${MEALIE_PG_IP}
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${PG_DB_NAME}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME}
+      SMTP_AUTH_STRATEGY: ${SMTP_AUTH_STRATEGY}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      ALLOW_PASSWORD_LOGIN: true
+      API_DOCS: false
+      TOKEN_TIME: 720
+#      OIDC_AUTH_ENABLED: true
+#      OIDC_SIGNUP_ENABLED: true
+#      OIDC_USER_GROUP: mealie-users
+#      OIDC_ADMIN_GROUP: mealie-admins
+#      OIDC_CONFIGURATION_URL: ${OIDC_CONFIGURATION_URL}
+#      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+#      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+#      OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME}
+#      OIDC_AUTO_REDIRECT: true
+#      OIDC_REMEMBER_ME: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      mealie:
+        ipv4_address: ${MEALIE_IP}
+    ports:
+      - ${MEALIE_EXP_PORT}:9000
+    volumes:
+      - mealie-data:/app/data/
+
+  postgres:
+    container_name: mealie-pg
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${PG_PASS}
+      POSTGRES_USER: ${PG_USER}
+      PGUSER: ${PG_USER}
+      POSTGRES_DB: ${PG_DB_NAME}
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      mealie:
+        ipv4_address: ${MEALIE_PG_IP}
+    volumes:
+      - mealie-pgdata:/var/lib/postgresql/data
