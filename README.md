@@ -1,2 +1,44 @@
 # Docker-compose-examples
 Collection of sterilized compose and env files for various containers and stacks.
+Will add more apps, links to their GitHub project pages and web sites, and HAProxy configurations for them soon.
+
+- Authelia
+- Authentik
+- Autoheal
+- Bookstack
+- ChangeDetection.io
+- CheckMK
+- Collobora
+- Crowdsec Web UI
+- Domotz
+- Draw.io
+- Firefly-III
+- Frigate
+- Glances
+- GLPI
+- Gotify
+- Home Assistant
+- Immich
+- Lube Logger
+- Mailu
+- Mealie
+- N8N
+- NetAlertX
+- NextCloud w/ ElasticSearch and ClamAV - Not AIO
+- OnlyOffice DocumentServer Community Edition
+- ownCloud
+- Paperless-ngx
+- PiHole
+- Plex Media Server and *arrs
+- Reactive Resume
+- Rickroll
+- Scrutiny
+- SenseAI
+- TacticalRMM
+- Unifi Network Application
+- Uptime-Kuma
+- UrBackup
+- Wallos
+- Watchtower
+- Wazuh
+- Zabbix
