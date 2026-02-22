@@ -1,0 +1,80 @@
+version: "3.9"
+
+# Networks
+networks:
+  drawionet:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: drawionet
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  fonts_volume:
+
+
+services:
+  # Draw.io Image Export server
+  image-export:
+    image: jgraph/export-server
+    container_name: image-export
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      DRAWIO_BASE_URL: https://${DRAWIO_HOST}.${DOMAIN}/
+    networks:
+      drawionet:
+        ipv4_address: ${IMG_EXP_IP}
+    ports:
+      - ${IMG_EXP_PORT}:8000
+    volumes:
+      - fonts_volume:/usr/share/fonts/drawio
+
+  plantuml-server:
+    image: plantuml/plantuml-server
+    container_name: plantuml-server
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+    networks:
+      drawionet:
+        ipv4_address: ${PLANTUML_IP}
+    ports:
+      - ${PLANTUML_PORT}:8000
+    volumes:
+      - fonts_volume:/usr/share/fonts/drawio
+
+  drawio:
+    image: jgraph/drawio
+    container_name: drawio
+    hostname: ${DRAWIO_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://${DRAWIO_IP}:8080 || exit 1"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      - image-export
+    environment:
+      TZ: ${TZ}
+      DRAWIO_SELF_CONTAINED: 1
+      DRAWIO_USE_HTTP: 1
+      PLANTUML_URL: http://${PLANTUML_IP}:8000/
+      EXPORT_URL: http://${IMG_EXP_IP}:8000/
+      DRAWIO_BASE_URL: https://${DRAWIO_HOST}.${DOMAIN}/
+      DRAWIO_SERVER_URL: https://${DRAWIO_HOST}.${DOMAIN}
+      DRAWIO_VIEWER_URL: https://${DRAWIO_HOST}.${DOMAIN}/js/viewer.min.js
+      DRAWIO_LIGHTBOX_URL: https://${DRAWIO_HOST}.${DOMAIN}
+    networks:
+      drawionet:
+        ipv4_address: ${DRAWIO_IP}
+    ports:
+      - ${DRAWIO_PORT}:8080

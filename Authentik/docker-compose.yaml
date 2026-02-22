@@ -1,0 +1,104 @@
+version: "3.9"
+
+#
+# Assumes Portainer deployment, hence the stack.env env_file entries. Change file names to suit environment
+#
+
+# Networks
+networks:
+  authentik:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: authentik
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  database:
+  data:
+  certs:
+  custom-templates:
+
+
+services:
+  # postgres server
+  postgresql:
+    image: postgres:16-alpine
+    container_name: authentik-postgresql
+    restart: unless-stopped
+    env_file:
+      - stack.env
+    environment:
+      POSTGRES_DB: ${PG_DB}
+      POSTGRES_PASSWORD: ${PG_PASS}
+      POSTGRES_USER: ${PG_USER}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    networks:
+      authentik:
+        ipv4_address: ${AUTH_PG_IP}
+    volumes:
+      - database:/var/lib/postgresql/data
+
+  # authentik server
+  server:
+    image: ${AUTHENTIK_IMAGE}:${AUTHENTIK_TAG}
+    container_name: authentik-server
+    restart: unless-stopped
+    env_file:
+      - stack.env
+    command: server
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_POSTGRESQL__USER: ${PG_USER}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+#      AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: 192.168.0.1/32 - If behind proxy, uncomment and alter IP to match proxy IP
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    networks:
+      authentik:
+        ipv4_address: ${AUTH_SERV_IP}
+    ports:
+      - ${EXT_PORT_HTTP}:9000
+      - ${EXT_PORT_HTTPS}:9443
+    volumes:
+      - data:/data
+      - custom-templates:/templates
+
+  # authentik worker
+  worker:
+    image: ${AUTHENTIK_IMAGE}:${AUTHENTIK_TAG}
+    container_name: authentik-worker
+    restart: unless-stopped
+    env_file:
+      - stack.env
+    command: worker
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}
+      AUTHENTIK_POSTGRESQL__USER: ${PG_USER}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    networks:
+      authentik:
+        ipv4_address: ${AUTH_WORK_IP}
+    volumes:
+      - data:/data
+      - certs:/certs
+      - custom-templates:/templates
+      - /var/run/docker.sock:/var/run/docker.sock # Can be removed if using a docker socket proxy, which is recommended
