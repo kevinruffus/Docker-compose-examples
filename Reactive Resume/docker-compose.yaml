@@ -1,0 +1,104 @@
+version: "3.9"
+
+
+# Networks
+networks:
+  reactive:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: reactive
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  pg_data:
+  data:
+
+
+services:
+  # Postgres
+  postgres:
+    image: postgres:latest
+    container_name: reactive-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASS}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      start_period: 10s
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      reactive:
+        ipv4_address: ${REACTIVE_PG_IP}
+    volumes:
+      - pg_data:/var/lib/postgresql
+
+  # Browserless
+  browserless:
+    image: ghcr.io/browserless/chromium:latest
+    container_name: reactive-browserless
+    restart: unless-stopped
+    environment:
+      QUEUED: 10
+      HEALTH: true
+      CONCURRENT: 5
+      TOKEN: ${BL_TOKEN}
+    healthcheck:
+      test:
+        ["CMD", "curl", "-f", "http://localhost:3000/pressure?token=${BL_TOKEN}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      reactive:
+        ipv4_address: ${BROWSER_IP}
+
+  reactive_resume:
+    image: ghcr.io/amruthpillai/reactive-resume:latest
+    container_name: reactive-resume
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      NODE_ENV: production
+      APP_URL: ${APP_URL}
+      PRINTER_APP_URL: http://${REACTIVE_IP}:3000
+      PRINTER_ENDPOINT: ws://${BROWSER_IP}:3000?token=${BL_TOKEN}
+      DATABASE_URL: postgresql://postgres:${DB_PASS}@${REACTIVE_PG_IP}:5432/postgres
+      AUTH_SECRET: ${AUTH_SECRET}
+#      OAUTH_PROVIDER_NAME: ${PROVIDER_NAME}
+#      OAUTH_CLIENT_ID: ${CLIENT_ID}
+#      OAUTH_CLIENT_SECRET: ${CLIENT_SECRET}
+#      OAUTH_DISCOVERY_URL: https://sso.example.com/application/o/reactive-resume/.well-known/openid-configuration
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      SMTP_SECURE: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      browserless:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      start_period: 10s
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      reactive:
+        ipv4_address: ${REACTIVE_IP}
+    ports:
+      - ${EXT_PORT_HTTP}:3000
+    volumes:
+      - data:/app/data

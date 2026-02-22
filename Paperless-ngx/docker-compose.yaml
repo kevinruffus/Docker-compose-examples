@@ -1,0 +1,115 @@
+version: "3.9"
+
+
+# Networks
+networks:
+  paperless:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: paperless
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  data:
+  media:
+  pgdata:
+  redisdata:
+
+
+services:
+  # Redis
+  broker:
+    container_name: plngx-redis
+    image: docker.io/library/redis:8
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    environment:
+      TZ: America/Chicago
+    networks:
+      paperless:
+        ipv4_address: ${REDIS_IP}
+    volumes:
+      - redisdata:/data
+
+  # Postgres
+  db:
+    container_name: plngx-db
+    image: docker.io/library/postgres:18
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${PG_PASS}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 15s
+    networks:
+      paperless:
+        ipv4_address: ${PG_IP}
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+  # Paperless-NGX server
+  webserver:
+    container_name: plngx-webserver
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    env_file:
+      - stack.env
+    depends_on:
+      - db
+      - broker
+    environment:
+      PAPERLESS_REDIS: redis://${REDIS_IP}:6379
+      PAPERLESS_DBHOST: ${PG_IP}
+      PAPERLESS_DBPORT: 5432
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: ${PG_PASS}
+      PAPERLESS_URL: ${URL}
+      PAPERLESS_TRUSTED_PROXIES: ${TRUSTED_PROXIES}
+      PAPERLESS_OCR_LANGUAGE: eng
+      PAPERLESS_TIME_ZONE: ${TZ}
+      PAPERLESS_SECRET_KEY: ${SECRET_KEY}
+      PAPERLESS_DB_READ_CACHE_ENABLED: true
+      PAPERLESS_EMAIL_HOST: ${EMAIL_HOST}
+      PAPERLESS_EMAIL_PORT: ${EMAIL_PORT}
+      PAPERLESS_EMAIL_HOST_USER: ${EMAIL_USER}
+      PAPERLESS_EMAIL_FROM: ${EMAIL_FROM}
+      PAPERLESS_EMAIL_HOST_PASSWORD: ${EMAIL_PASS}
+      PAPERLESS_EMAIL_USE_TLS: ${EMAIL_USE_TLS}
+      PAPERLESS_ADMIN_USER: ${ADMIN_USER}
+      PAPERLESS_ADMIN_PASSWORD: ${ADMIN_PASS}
+      PAPERLESS_ADMIN_MAIL: ${ADMIN_MAIL}
+#      PAPERLESS_APPS: allauth.socialaccount.providers.openid_connect
+#      PAPERLESS_SOCIALACCOUNT_PROVIDERS: ${SOCIALACCOUNT_PROVIDERS}
+#      PAPERLESS_LOGOUT_REDIRECT_URL: https://sso.example.com/application/o/paperless-ngx/end-session/
+#      PAPERLESS_SOCIAL_AUTO_SIGNUP: true
+#      PAPERLESS_SOCIALACCOUNT_ALLOW_SIGNUPS: true
+#      PAPERLESS_DISABLE_REGULAR_LOGIN: false
+#      PAPERLESS_REDIRECT_LOGIN_TO_SSO: false
+    networks:
+      paperless:
+        ipv4_address: ${PLNGX_IP}
+    ports:
+      - ${PLNGX_EXT_PORT}:8000
+    volumes:
+      - data:/usr/src/paperless/data
+      - media:/usr/src/paperless/media
+      - /whatever/Paperless-ngx/Export:/usr/src/paperless/export
+      - /whatever/Paperless-ngx/Consume:/usr/src/paperless/consume
