@@ -11,6 +11,7 @@ Will add more apps, links to their GitHub project pages and web sites, and HAPro
 - Collobora
 - Crowdsec Web UI
 - Domotz
+- Dozzle
 - Draw.io
 - Firefly-III
 - Frigate
