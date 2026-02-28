@@ -1,0 +1,110 @@
+version: "3.9"
+
+
+# networks
+networks:
+  zabbix:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: zabbix
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# docker managed persistent volumes
+volumes:
+  postgresql-data:
+  zabbix-server-data:
+  zabbix-snmptraps-data:
+  zabbix-export-data:
+  zabbix-web-data:
+
+
+# Services
+services:
+  postgres-server:
+    image: postgres:latest
+    container_name: postgres-server
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    networks:
+      zabbix:
+        ipv4_address: ${PG_IP}
+    volumes:
+      - postgresql-data:/var/lib/postgresql
+      - /etc/timezone:/etc/timezone:ro
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:latest
+    container_name: zabbix-server
+    restart: unless-stopped
+    depends_on:
+      - postgres-server
+    environment:
+      TZ: ${TZ}
+      DB_SERVER_HOST: postgres-server
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    networks:
+      zabbix:
+        ipv4_address: ${ZAS_IP}
+    ports:
+      - 10051:10051
+    volumes:
+      - zabbix-server-data:/var/lib/zabbix
+      - zabbix-snmptraps-data:/var/lib/zabbix/snmptraps
+      - zabbix-export-data:/var/lib/zabbix/export
+      - /etc/timezone:/etc/timezone:ro
+
+  zabbix-web-nginx-pgsql:
+    image: zabbix/zabbix-web-nginx-pgsql:latest
+    container_name: zabbix-web
+    restart: unless-stopped
+    depends_on:
+      - postgres-server
+      - zabbix-server
+    environment:
+      TZ: ${TZ}
+      DB_SERVER_HOST: postgres-server
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      ZBX_SERVER_HOST: zabbix-server
+      PHP_TZ: ${PHP_TZ}
+    networks:
+      zabbix:
+        ipv4_address: ${ZAW_IP}
+    ports:
+      - ${ZAW_EXT_PORT}:8080
+    volumes:
+      - zabbix-web-data:/usr/share/zabbix
+      - /etc/timezone:/etc/timezone:ro
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent:latest
+    container_name: zabbix-agent
+    restart: unless-stopped
+    depends_on:
+      - zabbix-server
+    environment:
+      TZ: ${TZ}
+      ZBX_HOSTNAME: "zabbix-server"
+      ZBX_SERVER_HOST: zabbix-server
+      ZBX_SERVER_PORT: 10051
+      ZBX_SERVER_ACTIVE: zabbix-server
+    networks:
+      zabbix:
+        ipv4_address: ${ZAA_IP}
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /etc/timezone:/etc/timezone:ro
+    privileged: true
