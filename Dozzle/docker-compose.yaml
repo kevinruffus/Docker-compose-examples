@@ -1,6 +1,3 @@
-version: "3.9"
-
-
 # Networks
 networks:
   dozzle:
@@ -12,7 +9,12 @@ networks:
       config:
         - subnet: ${SUBNET}/24
           gateway: ${GATEWAY}
-      
+
+
+# Docker managed persistent volumes
+volumes:
+  dozzle:
+
 
 services:
   dozzle:
@@ -42,4 +44,5 @@ services:
     ports:
       - ${DZ_EXT_PORT}:8080
     volumes:
+      - dozzle:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
