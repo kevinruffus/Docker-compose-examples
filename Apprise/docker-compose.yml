@@ -1,0 +1,54 @@
+# Networks
+networks:
+  apprise:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: apprise
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  config:
+  plugin:
+  attach:
+
+
+services:
+  apprise:
+    image: caronc/apprise:latest
+    container_name: apprise
+    hostname: ${APPRISE_HOST}
+    domainname: ${DOMAIN}
+    user: "${PUID:-1000}:${PGID:-1000}"
+    restart: unless-stopped
+    env_file: .env
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      APPRISE_STATEFUL_MODE: simple
+      APPRISE_WORKER_COUNT: 1
+      APPRISE_DEFAULT_FORMAT: "text"
+#      APPRISE_AUTH_REQUIRED: "yes"
+#      APPRISE_USER: 
+#      APPRISE_TRUSTED_ORIGINS: 
+#      APPRISE_WEB_AUTH_SECRET: 
+      TZ: ${TZ}
+    networks:
+      apprise:
+        ipv4_address: ${APPRISE_IP}
+    ports:
+      - ${APPRISE_EXT_PORT}:8000
+    volumes:
+      - config:/config
+      - plugin:/plugin
+      - attach:/attach
+    tmpfs:
+      - /tmp
