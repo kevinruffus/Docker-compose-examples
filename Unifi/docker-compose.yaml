@@ -1,0 +1,82 @@
+# Networks
+networks:
+  unifi-net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: unifi-net
+    ipam:
+      driver: default
+      config:
+        - subnet: ${SUBNET}/24
+          gateway: ${GATEWAY}
+
+
+# Docker managed persistent volumes
+volumes:
+  db:
+  config:
+
+
+services:
+  # Unifi Network Application
+  unifi-network-application:
+    image: lscr.io/linuxserver/unifi-network-application:latest
+    container_name: unifi-network-application
+    hostname: ${UNIFI_HOST}
+    domainname: ${DOMAIN}
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - MONGO_USER=${MONGO_USER}
+      - MONGO_PASS=${MONGO_PASS}
+      - MONGO_HOST=${MONGO_HOST}
+      - MONGO_PORT=${MONGO_PORT}
+      - MONGO_DBNAME=${MONGO_DBNAME}
+      - MONGO_AUTHSOURCE=${MONGO_AUTH}
+    depends_on:
+      unifi-db:
+        condition: service_healthy
+    networks:
+      unifi-net:
+        ipv4_address: ${UNIFI_IP}
+    ports:
+      - 8443:8443
+      - 3478:3478/udp
+      - 10001:10001/udp
+      - 8080:8080
+#      - 1900:1900/udp
+#      - 8843:8843 #optional
+#      - 8880:8880 #optional
+#      - 6789:6789 #optional
+#      - 5514:5514/udp #optional
+    volumes:
+      - config:/config
+
+  # MongoDB
+  unifi-db:
+    image: docker.io/mongo:8
+    container_name: unifi-db
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASS}
+      - MONGO_USER=${MONGO_USER}
+      - MONGO_PASS=${MONGO_PASS}
+      - MONGO_DBNAME=${MONGO_DBNAME}
+      - MONGO_AUTHSOURCE=${MONGO_AUTH}
+    networks:
+      unifi-net:
+        ipv4_address: ${DB_IP}
+    volumes:
+      - db:/data/db
+      - /ZFS1/init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh:ro
