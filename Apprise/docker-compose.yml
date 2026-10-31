@@ -37,15 +37,16 @@ services:
       APPRISE_WORKER_COUNT: 1
       APPRISE_DEFAULT_FORMAT: "text"
 #      APPRISE_AUTH_REQUIRED: "yes"
-#      APPRISE_USER: 
+#      APPRISE_USER: ${APPRISE_USER}
 #      APPRISE_TRUSTED_ORIGINS: 
-#      APPRISE_WEB_AUTH_SECRET: 
+#      APPRISE_WEB_AUTH_SECRET: ${WEB_AUTH_SECRET}
+#      APPRISE_PASSWORD: ${APPRISE_PASSWORD}
       TZ: ${TZ}
     networks:
       apprise:
         ipv4_address: ${APPRISE_IP}
     ports:
-      - ${APPRISE_EXT_PORT}:8000
+      - ${EXT_PORT}:8000
     volumes:
       - config:/config
       - plugin:/plugin
