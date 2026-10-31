@@ -1,1 +1,38 @@
+# networks
+networks:
+  dockhand:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: dockhand
+    ipam:
+      driver: default
+      config:
+        - subnet: 
+          gateway: 
 
+
+# Docker managed persistent volumes
+volumes:
+  data:
+
+services:
+  # Dockhand
+  dockhand:
+    image: fnsys/dockhand:latest
+    container_name: dockhand
+    restart: unless-stopped
+    hostname: 
+    domainname: 
+    environment:
+      DISABLE_LOCAL_LOGIN: true
+      OIDC_AUTOLOGIN: true
+      TRUST_FORWARDED_HEADERS: true
+      OIDC_END_SESSION: false
+    networks:
+      dockhand:
+        ipv4_address: 
+    ports:
+      - 3030:3000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - data:/app/data
